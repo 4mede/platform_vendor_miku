@@ -22,7 +22,17 @@ miku_generator {
     name: "generated_kernel_includes",
 
     // The headers make command
-    cmd: "$(PATH_OVERRIDE_SOONG) $(KERNEL_MAKE_CMD) $(KERNEL_MAKE_FLAGS) -C $(TARGET_KERNEL_SOURCE) O=$(KERNEL_BUILD_OUT_PREFIX)$(genDir) ARCH=$(KERNEL_ARCH) $(KERNEL_CROSS_COMPILE) headers_install && vendor/miku/tools/clean_headers.sh $(KERNEL_BUILD_OUT_PREFIX)$(genDir)",
+    cmd: "set -e; " +
+         "if [ -n \"$(TARGET_KERNEL_PLATFORM_TARGET)\" ]; then " +
+         "    pushd $(KERNEL_PATH); " +
+         "    ./tools/bazel --output_user_root=$(KERNEL_BUILD_OUT_PREFIX)$(genDir)/bazel-out --output_root=$(KERNEL_BUILD_OUT_PREFIX)$(genDir)/bazel-out run --experimental_convenience_symlinks=ignore --cpu=$(KERNEL_ARCH) //$(TARGET_KERNEL_SOURCE):$(TARGET_KERNEL_PLATFORM_TARGET)_uapi_headers_dist -- --destdir=$(KERNEL_BUILD_OUT_PREFIX)$(genDir); " +
+         "    popd; " +
+         "    gzip -d $(KERNEL_BUILD_OUT_PREFIX)$(genDir)/kernel-uapi-headers.tar.gz; " +
+         "    tar -xf $(KERNEL_BUILD_OUT_PREFIX)$(genDir)/kernel-uapi-headers.tar -C $(KERNEL_BUILD_OUT_PREFIX)$(genDir); " +
+         "else " +
+         "    $(PATH_OVERRIDE_SOONG) $(KERNEL_MAKE_CMD) $(KERNEL_MAKE_FLAGS) -C $(TARGET_KERNEL_SOURCE) O=$(KERNEL_BUILD_OUT_PREFIX)$(genDir) ARCH=$(KERNEL_ARCH) $(KERNEL_CROSS_COMPILE) headers_install; " +
+         "fi; " +
+         "vendor/miku/tools/clean_headers.sh $(KERNEL_BUILD_OUT_PREFIX)$(genDir)",
 
     // Directories that can be imported by a cc_* module generated_headers property
     export_include_dirs: [
@@ -30,12 +40,33 @@ miku_generator {
         "usr/include",
         "usr/include/audio",
         "usr/include/audio/include/uapi",
-        "usr/techpack/audio/include"
+        "usr/techpack/audio/include",
     ],
 
     // Sources for dependency tracking
     dep_root: "$(TARGET_KERNEL_SOURCE)",
-    dep_files: [ "Makefile", "include/**/*", "arch/$(KERNEL_ARCH)/include/**/*", "techpack/audio/include/**/*"],
+    dep_files: [
+        "Makefile",
+        "include/**/*",
+        "arch/$(KERNEL_ARCH)/include/**/*",
+        "techpack/audio/include/**/*",
+    ],
+}
+
+miku_generator {
+    name: "prebuilt_kernel_includes",
+
+    // The headers extract command
+    cmd: "mkdir -p $(KERNEL_BUILD_OUT_PREFIX)$(genDir) && gzip -d < $(TARGET_PREBUILT_KERNEL_HEADERS) | tar -x -C $(KERNEL_BUILD_OUT_PREFIX)$(genDir) && vendor/miku/tools/clean_headers.sh $(KERNEL_BUILD_OUT_PREFIX)$(genDir)",
+
+    // Directories that can be imported by a cc_* module generated_headers property
+    export_include_dirs: [
+        "usr/audio/include/uapi",
+        "usr/include",
+        "usr/include/audio",
+        "usr/include/audio/include/uapi",
+        "usr/techpack/audio/include",
+    ],
 }
 
 bootstrap_go_package {
@@ -62,247 +93,20 @@ cc_defaults {
     recovery_available: true,
 }
 
+cc_defaults {
+    name: "prebuilt_kernel_header_defaults",
+    generated_headers: ["prebuilt_kernel_includes"],
+    export_generated_headers: ["prebuilt_kernel_includes"],
+    vendor_available: true,
+    recovery_available: true,
+}
+
 cc_library_headers {
     name: "generated_kernel_headers",
     defaults: ["generated_kernel_header_defaults"],
 }
 
-// Target platform agnostic config modules
-soong_config_module_type {
-    name: "aapt_version_code",
-    module_type: "java_defaults",
-    config_namespace: "mikuGlobalVars",
-    value_variables: ["aapt_version_code"],
-    properties: ["aaptflags"],
-}
-
-aapt_version_code {
-    name: "aapt_version_code_defaults",
-    soong_config_variables: {
-        aapt_version_code: {
-            aaptflags: [
-                "--version-code",
-                "%s",
-            ],
-        },
-    },
-}
-
-soong_config_module_type {
-    name: "camera_override_format_from_reserved",
-    module_type: "cc_defaults",
-    config_namespace: "mikuGlobalVars",
-    bool_variables: ["camera_override_format_from_reserved"],
-    properties: ["cppflags"],
-}
-
-camera_override_format_from_reserved {
-    name: "camera_override_format_from_reserved_defaults",
-    soong_config_variables: {
-        camera_override_format_from_reserved: {
-            cppflags: ["-DTARGET_CAMERA_OVERRIDE_FORMAT_FROM_RESERVED"],
-        },
-    },
-}
-
-soong_config_module_type {
-    name: "gralloc_10_usage_bits",
-    module_type: "cc_defaults",
-    config_namespace: "mikuGlobalVars",
-    value_variables: ["additional_gralloc_10_usage_bits"],
-    properties: ["cppflags"],
-}
-
-gralloc_10_usage_bits {
-    name: "gralloc_10_usage_bits_defaults",
-    soong_config_variables: {
-        additional_gralloc_10_usage_bits: {
-            cppflags: ["-DADDNL_GRALLOC_10_USAGE_BITS=%s"],
-        },
-    },
-}
-
-soong_config_module_type {
-    name: "power_libperfmgr",
-    module_type: "cc_defaults",
-    config_namespace: "mikuGlobalVars",
-    value_variables: ["target_power_libperfmgr_mode_extension_lib"],
-    properties: [
-        "whole_static_libs",
-    ],
-}
-
-power_libperfmgr {
-    name: "power_libperfmgr_defaults",
-    soong_config_variables: {
-        target_power_libperfmgr_mode_extension_lib: {
-            whole_static_libs: ["%s"],
-        },
-    },
-}
-
-soong_config_module_type {
-    name: "target_process_sdk_version_overrides",
-    module_type: "cc_defaults",
-    config_namespace: "mikuGlobalVars",
-    value_variables: ["target_process_sdk_version_override"],
-    properties: ["cppflags"],
-}
-
-target_process_sdk_version_overrides {
-    name: "process_sdk_version_overrides_defaults",
-    soong_config_variables: {
-        target_process_sdk_version_override: {
-            cppflags: ["-DSDK_VERSION_OVERRIDES=\"%s\""],
-        },
-    },
-}
-
-soong_config_module_type {
-    name: "gralloc_handle_custom_content_md_reserved_size",
-    module_type: "cc_defaults",
-    config_namespace: "mikuGlobalVars",
-    bool_variables: ["gralloc_handle_has_custom_content_md_reserved_size"],
-    properties: ["export_cflags"],
-}
-
-gralloc_handle_custom_content_md_reserved_size {
-    name: "gralloc_handle_has_custom_content_md_reserved_size_defaults",
-    soong_config_variables: {
-        gralloc_handle_has_custom_content_md_reserved_size: {
-            export_cflags: ["-DGRALLOC_HANDLE_HAS_CUSTOM_CONTENT_MD_RESERVED_SIZE"],
-        },
-    },
-}
-
-soong_config_module_type {
-    name: "gralloc_handle_reserved_size",
-    module_type: "cc_defaults",
-    config_namespace: "mikuGlobalVars",
-    bool_variables: ["gralloc_handle_has_reserved_size"],
-    properties: ["export_cflags"],
-}
-
-gralloc_handle_reserved_size {
-    name: "gralloc_handle_has_reserved_size_defaults",
-    soong_config_variables: {
-        gralloc_handle_has_reserved_size: {
-            export_cflags: ["-DGRALLOC_HANDLE_HAS_RESERVED_SIZE"],
-        },
-    },
-}
-
-soong_config_module_type {
-    name: "gralloc_handle_ubwcp_format",
-    module_type: "cc_defaults",
-    config_namespace: "mikuGlobalVars",
-    bool_variables: ["gralloc_handle_has_ubwcp_format"],
-    properties: ["export_cflags"],
-}
-
-gralloc_handle_ubwcp_format {
-    name: "gralloc_handle_has_ubwcp_format_defaults",
-    soong_config_variables: {
-        gralloc_handle_has_ubwcp_format: {
-            export_cflags: ["-DGRALLOC_HANDLE_HAS_UBWCP_FORMAT"],
-        },
-    },
-}
-
-soong_config_module_type {
-    name: "surfaceflinger_udfps_lib",
-    module_type: "cc_defaults",
-    config_namespace: "mikuGlobalVars",
-    value_variables: ["target_surfaceflinger_udfps_lib"],
-    properties: [
-        "cppflags",
-        "whole_static_libs",
-    ],
-}
-
-surfaceflinger_udfps_lib {
-    name: "surfaceflinger_udfps_lib_defaults",
-    soong_config_variables: {
-        target_surfaceflinger_udfps_lib: {
-            cppflags: ["-DTARGET_PROVIDES_UDFPS_LIB"],
-            whole_static_libs: ["%s"],
-        },
-    },
-}
-
-soong_config_module_type {
-    name: "camera_needs_client_info_lib",
-    module_type: "cc_defaults",
-    config_namespace: "mikuGlobalVars",
-    bool_variables: ["camera_needs_client_info_lib"],
-    properties: [
-        "cppflags",
-        "shared_libs",
-    ],
-}
-
-camera_needs_client_info_lib {
-    name: "camera_needs_client_info_lib_defaults",
-    soong_config_variables: {
-        camera_needs_client_info_lib: {
-            cppflags: ["-DCAMERA_NEEDS_CLIENT_INFO_LIB"],
-            shared_libs: ["vendor.oneplus.hardware.camera@1.0"],
-        },
-    },
-}
-
-// QCOM specific config modules
-soong_config_module_type {
-    name: "librmnetctl_pre_uplink",
-    module_type: "cc_defaults",
-    config_namespace: "mikuQcomVars",
-    bool_variables: ["uses_pre_uplink_features_netmgrd"],
-    properties: ["cflags"],
-}
-
-librmnetctl_pre_uplink {
-    name: "librmnetctl_pre_uplink_defaults",
-    soong_config_variables: {
-        uses_pre_uplink_features_netmgrd: {
-            cflags: ["-DNO_UPLINK_FEATURES"],
-        },
-    },
-}
-
-soong_config_module_type {
-    name: "extended_compress_format",
-    module_type: "cc_defaults",
-    config_namespace: "mikuQcomVars",
-    bool_variables: ["supports_extended_compress_format"],
-    properties: ["cflags"],
-}
-
-extended_compress_format {
-    name: "extended_compress_format_defaults",
-    soong_config_variables: {
-        supports_extended_compress_format: {
-            cflags: ["-DENABLE_EXTENDED_COMPRESS_FORMAT"],
-        },
-    },
-}
-
-soong_config_module_type {
-    name: "surfaceflinger_qcom_extensions",
-    module_type: "cc_defaults",
-    config_namespace: "mikuQcomVars",
-    value_variables: ["qcom_display_headers_namespace"],
-    properties: [
-        "cppflags",
-        "header_libs",
-    ],
-}
-
-surfaceflinger_qcom_extensions {
-    name: "surfaceflinger_qcom_ext_defaults",
-    soong_config_variables: {
-        qcom_display_headers_namespace: {
-            cppflags: ["-DQCOM_UM_FAMILY"],
-            header_libs: ["//%s:display_intf_headers"],
-        },
-    },
+cc_library_headers {
+    name: "prebuilt_kernel_headers",
+    defaults: ["prebuilt_kernel_header_defaults"],
 }

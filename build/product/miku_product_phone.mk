@@ -17,10 +17,32 @@
 
 include vendor/miku/build/product/miku_product_common.mk
 
+ifeq ($(PRODUCT_TYPE), go)
+PRODUCT_PACKAGES += \
+    Launcher3QuickStepGo
+
+PRODUCT_DEXPREOPT_SPEED_APPS += \
+    Launcher3QuickStepGo
+else
+PRODUCT_PACKAGES += \
+    Launcher3QuickStep
+
+PRODUCT_DEXPREOPT_SPEED_APPS += \
+    Launcher3QuickStep
+endif
+
 PRODUCT_PACKAGES += \
     messaging \
     QuickAccessWallet \
     Stk
+    
+# Media
+PRODUCT_PRODUCT_PROPERTIES += \
+    media.recorder.show_manufacturer_and_model=true
+
+# SystemUI plugins
+PRODUCT_PACKAGES += \
+    QuickAccessWallet
 
 # World APN list
 PRODUCT_PACKAGES += \

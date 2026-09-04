@@ -18,6 +18,37 @@
 # Inherit from custom extra
 $(call inherit-product-if-exists, vendor/extra/product.mk)
 
+# Exclude repos from bp scanning
+PRODUCT_SOURCE_ROOT_DIRS += -kernel/platform
+PRODUCT_SOURCE_ROOT_DIRS += -prebuilts/misc/protobuf_vendorcompat
+
+# Allow vendor prebuilt repos to exclude themselves from bp scanning
+-include $(sort $(wildcard vendor/*/*/exclude-bp.mk))
+
+ifeq ($(PRODUCT_GMS_CLIENTID_BASE),)
+PRODUCT_PRODUCT_PROPERTIES += \
+    ro.com.google.clientidbase=android-google
+else
+PRODUCT_PRODUCT_PROPERTIES += \
+    ro.com.google.clientidbase=$(PRODUCT_GMS_CLIENTID_BASE)
+endif
+
+# Enable SIP+VoIP on all targets
+PRODUCT_COPY_FILES += \
+    frameworks/native/data/etc/android.software.sip.voip.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/permissions/android.software.sip.voip.xml
+
+# Credential storage
+PRODUCT_PACKAGES += \
+    android.software.credentials.prebuilt.xml
+
+# Enable wireless Xbox 360 controller support
+PRODUCT_COPY_FILES += \
+    frameworks/base/data/keyboards/Vendor_045e_Product_028e.kl:$(TARGET_COPY_OUT_PRODUCT)/usr/keylayout/Vendor_045e_Product_0719.kl
+    
+# Enforce privapp-permissions whitelist
+PRODUCT_PRODUCT_PROPERTIES += \
+    ro.control_privapp_permissions=enforce
+
 # Inherit from our versioning
 $(call inherit-product, vendor/miku/config/versioning.mk)
 
@@ -72,6 +103,14 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     charger_res_images \
     product_charger_res_images
+    
+# FRP
+PRODUCT_COPY_FILES += \
+    vendor/miku/prebuilt/common/bin/wipe-frp.sh:$(TARGET_COPY_OUT_RECOVERY)/root/system/bin/wipe-frp
+    
+# OverlayFS
+PRODUCT_PACKAGES_DEBUG += \
+    disable-overlays
 
 # Ringtone
 PRODUCT_COPY_FILES += \
@@ -82,6 +121,10 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.config.ringtone=miku_secret.ogg \
     ro.config.notification_sound=miku_noti_msg.ogg
+    
+# Storage manager
+PRODUCT_PRODUCT_PROPERTIES += \
+    ro.storage_manager.enabled=true
 
 # Performance Mode
 PRODUCT_COPY_FILES += \

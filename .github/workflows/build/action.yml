@@ -1,0 +1,13 @@
+name: build
+
+runs:
+    using: composite
+
+    steps:
+    - name: Install dependencies
+      shell: bash
+      run: sudo apt update && sudo apt -y install libxml2-utils pre-commit
+
+    - name: Lint
+      shell: bash
+      run: pre-commit run --all

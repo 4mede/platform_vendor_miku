@@ -4,12 +4,13 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-# Kernel
+# Recovery
+BOARD_USES_FULL_RECOVERY_IMAGE ?= true
+
 include vendor/miku/config/BoardConfigKernel.mk
 
-# Qcom-specific bits
 ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
-include hardware/qcom-caf/common/BoardConfigQcom.mk
+    include hardware/qcom-caf/common/BoardConfigQcom.mk
 endif
 
 # Boost Framework detection
@@ -24,5 +25,4 @@ $(warning Miku UI Boost Framework is enabled, if you faced any issue, please uns
 endif
 endif
 
-# Soong
 include vendor/miku/config/BoardConfigSoong.mk
